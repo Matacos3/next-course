@@ -3,6 +3,8 @@ import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { signIn } from '@/auth';
+import { AuthError } from 'next-auth';
 
 const FormSchema = z.object({
   id: z.string(),
@@ -34,18 +36,17 @@ export async function createInvoice(prevState: State, formData: FormData) {
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
-  console.log("ceci est le champ à valider", validatedFields)
+  console.log('ceci est le champ à valider', validatedFields);
 
-
-  if(!validatedFields.success){
-    console.log("erreur, parce que le champ donne une erreur")
+  if (!validatedFields.success) {
+    console.log('erreur, parce que le champ donne une erreur');
     return {
-      errors:validatedFields.error.flatten().fieldErrors,
-      message:"Missing Fields. Failed to Create Invoice"
-    }
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Create Invoice',
+    };
   }
 
-  console.log("c’est bon, les données sont valides")
+  console.log('c’est bon, les données sont valides');
   const { customerId, amount, status } = validatedFields.data;
 
   const amountInCents = amount * 100;
@@ -64,25 +65,25 @@ export async function createInvoice(prevState: State, formData: FormData) {
   redirect('/dashboard/invoices');
 }
 
-
-
-
-export async function updateInvoice(id: string, prevState : State, formdata: FormData) {
-
+export async function updateInvoice(
+  id: string,
+  prevState: State,
+  formdata: FormData,
+) {
   const validatedFields = UpdateInvoice.safeParse({
     customerId: formdata.get('customerId'),
     amount: formdata.get('amount'),
     status: formdata.get('status'),
   });
 
-  if(!validatedFields.success){
-    return{
-      errors : validatedFields.error.flatten().fieldErrors,
-      message:"Missing Fields. Failed to update Invoice"
-    }
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to update Invoice',
+    };
   }
 
-  const {customerId, amount, status} = validatedFields.data;
+  const { customerId, amount, status } = validatedFields.data;
   const amountInCents = amount * 100;
   try {
     await sql`
@@ -106,5 +107,24 @@ export async function deleteInvoice(id: string) {
     return { message: 'Deleted invoice' };
   } catch (error) {
     return { message: 'Database Error : Failed to Delete Invoice' };
+  }
+}
+
+export async function authenticate(
+  prevState: string | undefined,
+  formData: FormData,
+) {
+  try {
+    await signIn('credentials', formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return 'Invalid credentials';
+        default:
+          return 'Something went wrong';
+      }
+    }
+    throw error;
   }
 }
